@@ -893,7 +893,7 @@ def main_impl():
             request_timeout = REQUEST_TIMEOUT # If value is 0,"0","" or not passed then set default to 300 seconds.
 
         global API
-        API = FacebookAdsApi.init(access_token=access_token, timeout=request_timeout)
+        API = FacebookAdsApi.init(access_token=access_token)
         user = fb_user.User(fbid='me')
 
         accounts = user.get_ad_accounts()
@@ -911,14 +911,16 @@ def main_impl():
             do_discover()
         except FacebookError as fb_error:
             raise_from(SingerDiscoveryError, fb_error)
-    elif args.properties:
-        catalog = Catalog.from_dict(args.properties)
+    # elif args.properties:
+    else:
+        # catalog = Catalog.from_dict(args.properties)
+        catalog = args.catalog if args.catalog else do_discover()
         try:
             do_sync(account, catalog, args.state)
         except FacebookError as fb_error:
             raise_from(SingerSyncError, fb_error)
-    else:
-        LOGGER.info("No properties were selected")
+    # else:
+    #    LOGGER.info("No properties were selected")
 
 def main():
 
