@@ -898,7 +898,7 @@ def main_impl():
             request_timeout = REQUEST_TIMEOUT # If value is 0,"0","" or not passed then set default to 300 seconds.
 
         global API
-        API = FacebookAdsApi.init(access_token=access_token)
+        API = FacebookAdsApi.init(access_token=access_token, timeout=request_timeout)
         user = fb_user.User(fbid='me')
 
         accounts = user.get_ad_accounts()
