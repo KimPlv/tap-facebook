@@ -911,21 +911,18 @@ def main_impl():
     except FacebookError as fb_error:
         raise_from(SingerConfigurationError, fb_error)
 
+
     if args.discover:
         try:
             do_discover()
         except FacebookError as fb_error:
             raise_from(SingerDiscoveryError, fb_error)
-    # elif args.properties:
     else:
-        # catalog = Catalog.from_dict(args.properties)
         catalog = args.catalog if args.catalog else do_discover()
         try:
             do_sync(account, catalog, args.state)
         except FacebookError as fb_error:
             raise_from(SingerSyncError, fb_error)
-    # else:
-    #    LOGGER.info("No properties were selected")
 
 def main():
 
