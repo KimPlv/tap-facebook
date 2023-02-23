@@ -238,7 +238,7 @@ def batch_record_success(response, schemaless, stream=None, transformer=None, sc
     to resolve schema refs and transform the successful response object.'''
     rec = response.json()
     if schemaless:
-        singer.write_record(stream.name, record, stream.stream_alias, utils.now())
+        singer.write_record(stream.name, rec, stream.stream_alias, utils.now())
     else:
         record = transformer.transform(rec, schema)
         singer.write_record(stream.name, record, stream.stream_alias, utils.now())
@@ -810,7 +810,7 @@ def do_sync(account, catalog, state, schemaless):
                         counter.increment()
                         time_extracted = utils.now()
                         if schemaless:
-                            singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
+                            singer.write_record(stream.name, message['record'], stream.stream_alias, time_extracted)
                         else:
                             record = transformer.transform(message['record'], schema, metadata=metadata_map)
                             singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
@@ -884,6 +884,7 @@ def main_impl():
         args = utils.parse_args(REQUIRED_CONFIG_KEYS)
         account_id = args.config['account_id']
         access_token = args.config['access_token']
+        schemaless = args.config['schemaless']
 
         CONFIG.update(args.config)
 
@@ -920,7 +921,7 @@ def main_impl():
     else:
         catalog = args.catalog if args.catalog else do_discover()
         try:
-            do_sync(account, catalog, args.state)
+            do_sync(account, catalog, args.state, schemaless)
         except FacebookError as fb_error:
             raise_from(SingerSyncError, fb_error)
 
