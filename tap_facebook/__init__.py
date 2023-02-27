@@ -64,7 +64,7 @@ STREAMS = [
     #'leads',
 ]
 
-REQUIRED_CONFIG_KEYS = ['start_date', 'account_id', 'access_token']
+REQUIRED_CONFIG_KEYS = ['start_date', 'account_id', 'access_token', 'schemaless']
 UPDATED_TIME_KEY = 'updated_time'
 CREATED_TIME_KEY = 'created_time'
 START_DATE_KEY = 'date_start'
@@ -233,13 +233,15 @@ class IncrementalStream(Stream):
                 yield {'state': advance_bookmark(self, UPDATED_TIME_KEY, str(max_bookmark))}
 
 
-def batch_record_success(response, stream=None, transformer=None, schema=None):
+def batch_record_success(response, schemaless, stream=None, transformer=None, schema=None):
     '''A success callback for the FB Batch endpoint used when syncing AdCreatives. Needs the stream
     to resolve schema refs and transform the successful response object.'''
     rec = response.json()
-    record = transformer.transform(rec, schema)
-    singer.write_record(stream.name, record, stream.stream_alias, utils.now())
-
+    if schemaless:
+        singer.write_record(stream.name, rec, stream.stream_alias, utils.now())
+    else:
+        record = transformer.transform(rec, schema)
+        singer.write_record(stream.name, record, stream.stream_alias, utils.now())
 
 def batch_record_failure(response):
     '''A failure callback for the FB Batch endpoint used when syncing AdCreatives. Raises the error
@@ -254,7 +256,7 @@ class AdCreative(Stream):
 
     # Added retry_pattern to handle AttributeError raised from api_batch.execute() below
     @retry_pattern(backoff.expo, (FacebookRequestError, AttributeError), max_tries=5, factor=5)
-    def sync_batches(self, stream_objects):
+    def sync_batches(self, stream_objects, schemaless):
         refs = load_shared_schema_refs()
         schema = singer.resolve_schema_references(self.catalog_entry.schema.to_dict(), refs)
         transformer = Transformer(pre_hook=transform_date_hook)
@@ -273,7 +275,7 @@ class AdCreative(Stream):
             # Add a call to the batch with the full object
             obj.api_get(fields=self.fields(),
                         batch=api_batch,
-                        success=partial(batch_record_success, stream=self, transformer=transformer, schema=schema),
+                        success=partial(batch_record_success, schemaless, stream=self, transformer=transformer, schema=schema),
                         failure=batch_record_failure)
             batch_count += 1
 
@@ -288,9 +290,9 @@ class AdCreative(Stream):
     def get_adcreatives(self):
         return self.account.get_ad_creatives(params={'limit': RESULT_RETURN_LIMIT})
 
-    def sync(self):
+    def sync(self, schemaless):
         adcreatives = self.get_adcreatives()
-        self.sync_batches(adcreatives)
+        self.sync_batches(adcreatives, schemaless)
 
 
 class Ads(IncrementalStream):
@@ -466,7 +468,7 @@ class Leads(Stream):
 
     # Added retry_pattern to handle AttributeError raised from api_batch.execute() below
     @retry_pattern(backoff.expo, (FacebookRequestError, AttributeError), max_tries=5, factor=5)
-    def sync_batches(self, stream_objects):
+    def sync_batches(self, stream_objects, schemaless):
         refs = load_shared_schema_refs()
         schema = singer.resolve_schema_references(self.catalog_entry.schema.to_dict(), refs)
         transformer = Transformer(pre_hook=transform_date_hook)
@@ -491,7 +493,7 @@ class Leads(Stream):
             # Add a call to the batch with the full object
             obj.api_get(fields=self.fields(),
                         batch=api_batch,
-                        success=partial(batch_record_success, stream=self, transformer=transformer, schema=schema),
+                        success=partial(batch_record_success, schemaless, stream=self, transformer=transformer, schema=schema),
                         failure=batch_record_failure)
             batch_count += 1
 
@@ -521,14 +523,14 @@ class Leads(Stream):
         for ad in ads:
             yield from ad.get_leads(params=params)
 
-    def sync(self):
+    def sync(self, schemaless):
         start_time = pendulum.utcnow()
         previous_start_time = self.state.get("bookmarks", {}).get("leads", {}).get(self.replication_key, CONFIG.get('start_date'))
 
         previous_start_time = pendulum.parse(previous_start_time)
         ads = self.get_ads()
         leads = self.get_leads(ads, start_time, int(previous_start_time.timestamp()))
-        latest_lead_time = self.sync_batches(leads)
+        latest_lead_time = self.sync_batches(leads, schemaless)
 
         if not latest_lead_time is None:
             singer.write_bookmark(self.state, 'leads', self.replication_key, latest_lead_time)
@@ -785,7 +787,7 @@ def transform_date_hook(data, typ, schema):
         return transformed
     return data
 
-def do_sync(account, catalog, state):
+def do_sync(account, catalog, state, schemaless):
     streams_to_sync = get_streams_to_sync(account, catalog, state)
     refs = load_shared_schema_refs()
     for stream in streams_to_sync:
@@ -798,7 +800,7 @@ def do_sync(account, catalog, state):
 
         # NB: The AdCreative stream is not an iterator
         if stream.name in {'adcreative', 'leads'}:
-            stream.sync()
+            stream.sync(schemaless)
             continue
 
         with Transformer(pre_hook=transform_date_hook) as transformer:
@@ -807,8 +809,11 @@ def do_sync(account, catalog, state):
                     if 'record' in message:
                         counter.increment()
                         time_extracted = utils.now()
-                        record = transformer.transform(message['record'], schema, metadata=metadata_map)
-                        singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
+                        if schemaless:
+                            singer.write_record(stream.name, message['record'], stream.stream_alias, time_extracted)
+                        else:
+                            record = transformer.transform(message['record'], schema, metadata=metadata_map)
+                            singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
                     elif 'state' in message:
                         singer.write_state(message['state'])
                     else:
@@ -879,6 +884,7 @@ def main_impl():
         args = utils.parse_args(REQUIRED_CONFIG_KEYS)
         account_id = args.config['account_id']
         access_token = args.config['access_token']
+        schemaless = args.config['schemaless']
 
         CONFIG.update(args.config)
 
@@ -915,7 +921,7 @@ def main_impl():
     else:
         catalog = args.catalog if args.catalog else do_discover()
         try:
-            do_sync(account, catalog, args.state)
+            do_sync(account, catalog, args.state, schemaless)
         except FacebookError as fb_error:
             raise_from(SingerSyncError, fb_error)
 
