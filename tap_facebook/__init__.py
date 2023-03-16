@@ -807,6 +807,7 @@ def do_sync(account, catalog, state):
                     if 'record' in message:
                         counter.increment()
                         time_extracted = utils.now()
+                        message['record'] = json.dumps(message['record'], sort_keys=True)
                         record = transformer.transform(message['record'], schema, metadata=metadata_map)
                         singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
                     elif 'state' in message:
