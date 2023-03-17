@@ -238,8 +238,10 @@ def batch_record_success(response, schemaless, stream=None, transformer=None, sc
     to resolve schema refs and transform the successful response object.'''
     rec = response.json()
     if schemaless:
+        rec = dict(sorted(rec.items(), key=lambda x: x[0]))
         singer.write_record(stream.name, rec, stream.stream_alias, utils.now())
     else:
+        rec = dict(sorted(rec.items(), key=lambda x: x[0]))
         record = transformer.transform(rec, schema)
         singer.write_record(stream.name, record, stream.stream_alias, utils.now())
 
@@ -810,20 +812,12 @@ def do_sync(account, catalog, state, schemaless):
                         counter.increment()
                         time_extracted = utils.now()
                         if schemaless:
-                            singer.write_record(stream.name, message['record'], stream.stream_alias, time_extracted)
-                        else:
-                            LOGGER.info(type(message['record']))
-                            LOGGER.info('-------------------')
-                            record = transformer.transform(message['record'], schema, metadata=metadata_map)
-                            LOGGER.info(type(record))
-                            LOGGER.info('-------------------')
-                            record = dict(sorted(record.items(), key=lambda x: x[0]))
-                            LOGGER.info(type(record))
-                            LOGGER.info(record)
-                            LOGGER.info('-------------------')
+                            record = dict(sorted(message['record'].items(), key=lambda x: x[0]))
                             singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
-                            LOGGER.info('WRITE RECORD')
-                            LOGGER.info('-------------------')
+                        else:
+                            record = dict(sorted(message['record'].items(), key=lambda x: x[0]))
+                            record = transformer.transform(record, schema, metadata=metadata_map)
+                            singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
                     elif 'state' in message:
                         singer.write_state(message['state'])
                     else:
