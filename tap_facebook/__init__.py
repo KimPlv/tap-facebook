@@ -240,7 +240,8 @@ def batch_record_success(response, schemaless, stream=None, transformer=None, sc
     if schemaless:
         singer.write_record(stream.name, rec, stream.stream_alias, utils.now())
     else:
-        record = transformer.transform(rec, schema)
+        record = json.dumps(rec, sort_keys=True)
+        #record = transformer.transform(rec, schema)
         singer.write_record(stream.name, record, stream.stream_alias, utils.now())
 
 def batch_record_failure(response):
