@@ -810,13 +810,7 @@ def do_sync(account, catalog, state, schemaless):
                         counter.increment()
                         time_extracted = utils.now()
                         if schemaless:
-                            LOGGER.info('------------------------------------------------')
-                            LOGGER.info(message['record'])
-                            LOGGER.info('------------------------------------------------')
-                            record = json.dumps(message['record'], sort_keys=True)
-                            LOGGER.info(record)
-                            LOGGER.info('------------------------------------------------')
-                            singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
+                            singer.write_record(stream.name, message['record'], stream.stream_alias, time_extracted)
                         else:
                             LOGGER.info('------------------------------------------------')
                             LOGGER.info(message['record'])
@@ -824,7 +818,12 @@ def do_sync(account, catalog, state, schemaless):
                             record = json.dumps(message['record'], sort_keys=True)
                             LOGGER.info(record)
                             LOGGER.info('------------------------------------------------')
-                            record = transformer.transform(record, schema, metadata=metadata_map)
+                            record = transformer.transform(message['record'], schema, metadata=metadata_map)
+                            LOGGER.info(record)
+                            LOGGER.info('------------------------------------------------')
+                            LOGGER.info(stream.name)
+                            LOGGER.info(stream.stream_alias)
+                            LOGGER.info('------------------------------------------------')
                             singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
                     elif 'state' in message:
                         singer.write_state(message['state'])
