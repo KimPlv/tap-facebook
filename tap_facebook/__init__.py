@@ -812,10 +812,10 @@ def do_sync(account, catalog, state, schemaless):
                         if schemaless:
                             singer.write_record(stream.name, message['record'], stream.stream_alias, time_extracted)
                         else:
-                            LOGGER.info(message['record'])
+                            LOGGER.info(type(message['record']))
                             LOGGER.info('-------------------')
                             record = transformer.transform(message['record'], schema, metadata=metadata_map)
-                            LOGGER.info(record)
+                            LOGGER.info(type(record))
                             LOGGER.info('-------------------')
                             singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
                             LOGGER.info('WRITE RECORD')
