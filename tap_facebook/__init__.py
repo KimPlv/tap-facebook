@@ -240,8 +240,7 @@ def batch_record_success(response, schemaless, stream=None, transformer=None, sc
     if schemaless:
         singer.write_record(stream.name, rec, stream.stream_alias, utils.now())
     else:
-        record = json.dumps(rec, sort_keys=True)
-        #record = transformer.transform(rec, schema)
+        record = transformer.transform(rec, schema)
         singer.write_record(stream.name, record, stream.stream_alias, utils.now())
 
 def batch_record_failure(response):
@@ -813,17 +812,17 @@ def do_sync(account, catalog, state, schemaless):
                         if schemaless:
                             singer.write_record(stream.name, message['record'], stream.stream_alias, time_extracted)
                         else:
-                            LOGGER.info('------------------------------------------------')
                             LOGGER.info(message['record'])
-                            LOGGER.info('------------------------------------------------')
-                            record = json.dumps(message['record'], sort_keys=True)
+                            LOGGER.info('-------------------')
+                            record = transformer.transform(message['record'], schema, metadata=metadata_map)
                             LOGGER.info(record)
-                            LOGGER.info('------------------------------------------------')
-                            #record = transformer.transform(message['record'], schema, metadata=metadata_map)
-                            LOGGER.info(stream.name)
-                            LOGGER.info(stream.stream_alias)
-                            LOGGER.info('------------------------------------------------')
+                            LOGGER.info('-------------------')
+                            record = json.dumps(record, sort_keys=True)
+                            LOGGER.info(record)
+                            LOGGER.info('-------------------')
                             singer.write_record(stream.name, record, stream.stream_alias, time_extracted)
+                            LOGGER.info('WRITE RECORD')
+                            LOGGER.info('-------------------')
                     elif 'state' in message:
                         singer.write_state(message['state'])
                     else:
